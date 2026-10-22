@@ -1,0 +1,1 @@
+90d0bde210ca5e601bfc49013dfe4d556e3ca74a6dfadec5ffd2e4a8a366fed9  vclarity-0.1.0-chrome.zip

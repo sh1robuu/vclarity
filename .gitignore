@@ -1,0 +1,14 @@
+node_modules/
+.pnpm-store/
+.env
+.env.*
+!.env.example
+.wxt/
+.output/
+dist/
+coverage/
+test-results/
+playwright-report/
+.browser-profile/
+.playwright/
+*.tsbuildinfo

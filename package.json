@@ -1,0 +1,13 @@
+{
+  "name": "vclarity", "version": "0.1.0", "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "pnpm --filter @vclarity/extension dev",
+    "dev:api": "pnpm --filter @vclarity/api dev",
+    "build": "pnpm --filter @vclarity/extension build && pnpm --filter @vclarity/api build",
+    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.tools.json",
+    "test": "vitest run", "test:browser": "playwright test", "benchmark": "tsx tests/palette.bench.ts",
+    "lint": "eslint ."
+  },
+  "devDependencies": { "@eslint/js": "^9.39.0", "@playwright/test": "^1.56.1", "@types/chrome": "^0.1.24", "@types/node": "^22.18.0", "eslint": "^9.39.0", "globals": "^16.5.0", "tsx": "^4.20.6", "typescript": "^5.9.3", "typescript-eslint": "^8.46.2", "vitest": "^3.2.4" }
+}
