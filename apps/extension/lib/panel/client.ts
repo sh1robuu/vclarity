@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { analysisRequestSchema, analysisResponseSchema, apiErrorSchema, panelCommandSchema, rectSchema, reportSchema, viewportSchema, type BackgroundEvent, type CommandResult, type PanelCommand, type Report } from '@vclarity/shared';
 import { processCapture, disposeImageProcessing, disposePreview } from '../image';
 import { matchesSession, usePanel } from '../../stores/panel';
+import { restoreConnection } from './settings';
 
 const backgroundEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('CONTEXT'), windowId: z.number().int(), tabId: z.number().int(), url: z.string().max(2000), report: reportSchema.nullable() }).strict(),
@@ -65,6 +66,7 @@ function acceptEvent(raw: unknown, _sender?: chrome.runtime.MessageSender, respo
   if (!parsed.success) return;
   const event = parsed.data;
   if (event.type !== 'REPORT' && event.windowId !== usePanel.getState().windowId) return;
+  if (event.type === 'REPORT' && event.report.tabId !== usePanel.getState().tabId) return;
   eventRevision += 1;
   if (event.type === 'CONTEXT') {
     const state = usePanel.getState();
@@ -82,7 +84,6 @@ export async function startInspect(mode: 'live' | 'ghost'): Promise<void> {
   const { tabId } = usePanel.getState();
   if (tabId === null) throw new Error('Open a website tab and reopen Vclarity to inspect it.');
   await sendCommand({ type: 'START', mode, tabId });
-  usePanel.getState().set({ selectedTab: 'design' });
 }
 
 export async function cancelInspect(): Promise<void> {
@@ -103,7 +104,8 @@ export async function analyzeCapture(): Promise<void> {
   const request = analysisRequestSchema.parse({ requestId, image: initial.image });
   aiFlight = { tabId, sessionId, controller };
   let timedOut = false;
-  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 90_000);
+  // Backend permits a 120s deadline; leave room for transport and validation.
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 130_000);
   try {
     await sendCommand({ type: 'AI_START', tabId, sessionId, requestId });
     if (controller.signal.aborted || !matchesSession(usePanel.getState(), tabId, sessionId, requestId)) return;
@@ -142,6 +144,7 @@ export function connectPanel(): () => void {
     usePanel.getState().set({ connectionError: 'Open Vclarity as a Chrome extension side panel to connect to a website.' });
     return () => undefined;
   }
+  void restoreConnection();
   let disposed = false;
   let port: chrome.runtime.Port | null = null;
   let windowId: number | null = null;

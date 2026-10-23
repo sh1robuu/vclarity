@@ -14,10 +14,11 @@ Visible screenshots can contain personal data, internal documents, rendered cred
 ## Credentials and local server
 
 - `AI_API_KEY` belongs only in `apps/api/.env` or the server process environment. The Gemini adapter also accepts server-side `GEMINI_API_KEY`, and Ollama accepts `OLLAMA_API_KEY`. No provider key is needed for local inspection, and no provider key is included in extension source or client storage.
-- `API_ACCESS_TOKEN` is a separate random token required to start the API. It must contain 32–512 characters. The panel sends it as a Bearer token and keeps it only in panel memory. It is not the provider key.
+- `API_ACCESS_TOKEN` is a separate random token required to start the API. It must contain 32–512 characters. The panel sends it as a Bearer token. Saving it in Settings writes it to `chrome.storage.local` for future panel sessions; local storage access is restricted to trusted extension contexts, and the inspector does not need it. It is not the provider key. The saved token is ordinary local profile data, not an encrypted credential vault; clear it through Settings when no longer needed.
 - `.env` files are excluded by `.gitignore`; `.env.example` contains no secrets. Do not commit an actual environment file or put it inside the unpacked-extension directory.
 - The HTTP listener binds to `127.0.0.1`. It validates loopback Host names, permits browser origins only of the form `chrome-extension://<valid-id>`, and optionally restricts them to `API_EXTENSION_ID`. Non-browser requests without Origin still require the token for analysis.
-- CORS is an additional browser boundary. It does not replace authentication. Every `POST /analyze` requires the local token, compared through fixed-length digests and a timing-safe comparison. `GET /health` discloses only service health and whether a provider is configured.
+- CORS is an additional browser boundary. It does not replace authentication. Both `POST /analyze` and `GET /connection` require the local token, compared through fixed-length digests and a timing-safe comparison. `GET /health` discloses only service health and whether a provider is configured.
+- `GET /connection` returns only the provider name, bounded configured model name, provider-key configuration status and known image-support status. It never returns either credential, makes no provider request and does not use the analysis rate budget. Image support remains unknown unless the model is known to be unsupported; a successful local connection test is not a live credential, modality or quota verification.
 - The local token protects the external-provider endpoint, including free-tier quota. Defaults permit 10 authenticated attempts per minute and two concurrent uploads/analyses across this process. Limits are process-local and reset on restart.
 
 The shipped server is designed for a single-user loopback deployment. Public hosting would require a deployment-specific authentication, TLS, proxy and rate-limit design before use. Changing `API_PORT` alone does not change the panel endpoint or CSP.
@@ -28,12 +29,12 @@ The shipped server is designed for a single-user loopback deployment. Public hos
 | --- | --- |
 | Full viewport screenshot | Transient extension message and local image-worker input; not written to report storage. |
 | Cropped image, optimized upload and preview | Panel/worker memory and a local Blob URL; discarded from application state on a new session, tab change, cancellation or panel teardown. Preview URLs are revoked and image workers terminated. |
-| Local service token | Panel memory only; re-enter after closing or reloading the panel. |
+| Local service token | Draft/panel memory and, after an explicit save, trusted-context `chrome.storage.local`. A saved token survives panel closure and browser restart until cleared through Settings, extension data removal or uninstall. |
 | Provider API key | Server environment only. |
 | Validated inspection report | Per-tab `chrome.storage.session`, so service-worker suspension can preserve lightweight results. Navigation and tab removal clear the relevant report; browser-session shutdown ends session storage. |
 | Copied Markdown | Written only when a user activates a copy action. Further clipboard or destination-app retention is outside the extension. |
 
-Reports can contain URL paths, element selectors, measured CSS and model-generated descriptions of visible content. Query strings, URL fragments and URL credentials are removed from report URLs, but a path or selector can still be sensitive. Closing the panel discards its image and token; it does not automatically delete every completed session report. No screenshots or credentials are added to report objects.
+Reports can contain URL paths, element selectors, measured CSS and model-generated descriptions of visible content. Query strings, URL fragments and URL credentials are removed from report URLs, but a path or selector can still be sensitive. Closing the panel discards its image and in-memory token draft; it does not automatically delete every completed session report or an explicitly saved local token. No screenshots or credentials are added to report objects. Only the local service token can be saved by the extension; provider API keys remain server-side.
 
 The application does not include analytics or a screenshot archive. Do not treat ordinary JavaScript memory cleanup as secure memory erasure.
 
@@ -58,7 +59,7 @@ The API returns deliberately written error messages and logs only allowlisted er
 | `activeTab` | Temporary access to the tab after a user gesture, including permitted capture and injection. |
 | `scripting` | Inject the small inspector only when requested. |
 | `sidePanel` | Display the native Chrome Side Panel. |
-| `storage` | Keep validated lightweight per-tab reports in `chrome.storage.session`. |
+| `storage` | Keep validated lightweight per-tab reports in `chrome.storage.session` and an explicitly saved local service token in trusted-context `chrome.storage.local`. |
 | `clipboardWrite` | Support explicit Copy Note actions from the extension UI. |
 | `http://127.0.0.1/*` host access | Reach the user's local AI backend. Chrome match patterns cover all ports on that host; CSP restricts extension requests to `http://127.0.0.1:4317`. |
 

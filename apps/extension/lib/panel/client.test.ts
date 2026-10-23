@@ -92,6 +92,17 @@ describe('panel AI request orchestration', () => {
 });
 
 describe('panel lifecycle messages', () => {
+  it('accepts initial context even when another tab broadcasts while it is loading', async () => {
+    let finish!: (result: unknown) => void;
+    vi.mocked(chrome.runtime.sendMessage).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    usePanel.getState().set({ tabId: null, report: null, url: '' });
+    stop = connectPanel();
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    for (const handler of handlers) handler({ type: 'REPORT', report: { ...baseReport, tabId: 99 } });
+    finish({ ok: true, tabId: 4, url: baseReport.url, report: baseReport });
+    await vi.waitFor(() => expect(usePanel.getState().tabId).toBe(4));
+    expect(usePanel.getState().url).toBe(baseReport.url);
+  });
   it('ignores context and capture broadcasts for another Chrome window', async () => {
     stop = connectPanel();
     await vi.waitFor(() => expect(messages[0]?.type).toBe('GET_CONTEXT'));

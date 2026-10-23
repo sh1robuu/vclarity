@@ -29,7 +29,7 @@ pnpm build
 
 This produces the Chrome extension in `apps/extension/.output/chrome-mv3` and the bundled Node API in `apps/api/dist/index.js`.
 
-The checked-in handoff also includes [a packaged extension ZIP](releases/vclarity-0.1.0-chrome.zip). Extract it into a folder before choosing **Load unpacked**. The ZIP contains the built extension only; source and the optional API service are in this repository.
+The handoff also includes [a packaged extension ZIP](releases/vclarity-0.1.1-chrome.zip). Extract it into a folder before choosing **Load unpacked**. The ZIP contains the built extension only; source and the optional API service are in this repository. The 0.1.1 audit and fixes are recorded in [the product audit](docs/product-audit-2026-10-23.md).
 
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode**.
@@ -87,7 +87,9 @@ The response reports `status: ok` and whether AI is configured. A missing provid
 
 For Gemini, `pnpm --filter @vclarity/api check:gemini` checks the configured key and exact model against Google's model metadata endpoint without uploading an image or running inference. Metadata access does not establish available generation quota.
 
-In the extension, open **Settings** and enter the same `API_ACCESS_TOKEN`. Never paste `AI_API_KEY` into the extension. The token stays in that panel's memory and must be entered again after the panel is closed or reloaded.
+In the extension, open **Settings**, enter the same `API_ACCESS_TOKEN`, and press Enter or choose **Save connection** to keep it for later panel sessions. Never paste `AI_API_KEY` into the extension. The saved local token is stored in `chrome.storage.local`, restricted to trusted extension contexts. This is ordinary local extension storage, not an encrypted credential vault. Use **Forget saved token** to remove it, or turn off **Remember this local service token on this device** before saving for panel-only use. Saving works while the backend is offline and explains how to reconnect.
+
+Use **Test connection** to check the local token and view the server's configured provider, model and whether a provider key is set. This calls authenticated `GET /connection`; it sends no screenshot, performs no inference and does not consume the analysis request budget. Unknown image support is shown as unverified, while known text-only Ollama GPT-OSS configurations are rejected for image analysis. A successful connection check does not verify external provider credentials, model access or quota.
 
 Capture a region, inspect its preview and size, then open **Product & UX Insights**. Check the consent box and click **Send image & analyze**. Images that exceed the 100 KB compression target require an additional size acknowledgment. Only the cropped, optimized image and a request ID are sent to the local service; the service then sends the image to the configured provider. Provider results are validated before display. Failed AI analysis can be retried while the capture remains in panel memory.
 
@@ -168,12 +170,11 @@ docs/                      Architecture, security and verification records
 - Browser page zoom is accounted for through bitmap-to-viewport ratios. Pinch zoom and visual viewport panning are rejected explicitly. Moving the viewport or scrolling during capture requires a new selection.
 - Local crops are limited to 8192 pixels per dimension and 32 million pixels. AI uploads are limited to 2 MB, 8192 pixels per dimension and 16,777,216 pixels. A larger region can remain usable for local analysis while requiring a smaller selection for AI.
 - Optimization targets less than 100,000 bytes while preserving readable detail. It can exceed that target with a visible warning and explicit acknowledgment, or reject a region that cannot fit the hard upload limit.
-- Screenshots, previews and the local access token are temporary panel state. New inspections, tab changes, cancellation or panel closure discard the current capture. Restoring a lightweight report after worker suspension does not restore its screenshot; capture again when necessary.
+- Screenshots and previews are temporary panel state. New inspections, tab changes, cancellation or panel closure discard the current capture. Restoring a lightweight report after worker suspension does not restore its screenshot; capture again when necessary. The saved local service token remains in extension local storage until explicitly cleared or the extension's stored data is removed.
 - Reports stay in `chrome.storage.session` during the browser session and may contain page paths, measured selectors, and analysis text. Screenshots and credentials are excluded. Navigation or tab removal clears that tab's report. See [security and privacy](docs/security.md).
 - If AI cannot connect, start the service on `127.0.0.1:4317`. For authentication errors, compare the panel token with server `API_ACCESS_TOKEN`. For provider authentication, model access, timeout or quota errors, follow the backend message and check the server configuration. Local inspection remains available.
 - Screenshot analysis cannot verify hidden states, interaction behavior, internal business rules, authored CSS, or accessibility conformance. Validate inferred behavior independently.
 
 ## Permissions
 
-Vclarity requests `activeTab` for temporary user-granted access, `scripting` for on-demand inspector injection, `sidePanel` for its native UI, `storage` for lightweight session reports, and `clipboardWrite` for user-triggered Copy Note actions from the extension. Its only persistent host permission is `http://127.0.0.1/*` for the local API. Chrome host match patterns cover all ports for that host; the extension's `connect-src` CSP narrows requests to port 4317. It does not request persistent access to arbitrary websites.
-"# vclarity" 
+Vclarity requests `activeTab` for temporary user-granted access, `scripting` for on-demand inspector injection, `sidePanel` for its native UI, `storage` for lightweight session reports and the saved local service token, and `clipboardWrite` for user-triggered Copy Note actions from the extension. Its only persistent host permission is `http://127.0.0.1/*` for the local API. Chrome host match patterns cover all ports for that host; the extension's `connect-src` CSP narrows requests to port 4317. It does not request persistent access to arbitrary websites.

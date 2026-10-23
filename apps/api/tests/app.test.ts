@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Analysis } from '@vclarity/shared';
+import { connectionInfoSchema, type Analysis } from '@vclarity/shared';
 import { createApp } from '../src/app';
 import { loadConfig, type ApiConfig } from '../src/config';
 import { ApiError } from '../src/errors';
@@ -183,5 +183,75 @@ describe('local browser boundary', () => {
     const response = await createApp(config(), { provider }).request(new Request('http://evil.example:4317/analyze', { method: 'POST', headers, body: JSON.stringify(payload) }));
     expect(response.status).toBe(403);
     expect(provider.analyze).not.toHaveBeenCalled();
+  });
+});
+
+describe('connection configuration endpoint', () => {
+  const connectionRequest = (authorization: string | undefined = `Bearer ${token}`, requestOrigin = origin) => new Request('http://127.0.0.1:4317/connection', {
+    headers: { ...(authorization === undefined ? {} : { Authorization: authorization }), Origin: requestOrigin },
+  });
+
+  it.each(['', 'Bearer wrong-token', 'Basic wrong-token', `Bearer ${'x'.repeat(513)}`])('requires the local token before returning configuration', async (authorization) => {
+    const response = await createApp(config()).request(connectionRequest(authorization));
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: 'unauthorized' } });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('requires authentication when the header is absent', async () => {
+    const response = await createApp(config()).request(new Request('http://127.0.0.1:4317/connection', { headers: { Origin: origin } }));
+    expect(response.status).toBe(401);
+  });
+
+  it('returns only validated nonsecret configuration without contacting a provider', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('No external request is allowed'));
+    try {
+      const app = createApp(config({ provider: 'gemini', model: 'gemini-test-model', apiKey: 'server-provider-secret' }));
+      const response = await app.request(connectionRequest());
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      expect(connectionInfoSchema.parse(body)).toEqual({ provider: 'gemini', model: 'gemini-test-model', aiConfigured: true, imageAnalysisSupported: null });
+      expect(JSON.stringify(body)).not.toContain('server-provider-secret');
+      expect(JSON.stringify(body)).not.toContain(token);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+      expect(transport).not.toHaveBeenCalled();
+    } finally { transport.mockRestore(); }
+  });
+
+  it('reports missing provider configuration while allowing the token to be checked', async () => {
+    const response = await createApp(config()).request(connectionRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ provider: 'openai', model: 'gpt-4.1-mini', aiConfigured: false, imageAnalysisSupported: null });
+  });
+
+  it.each(['gpt-oss:120b', 'GPT-OSS:20b', 'gpt-oss'])('identifies a known text-only Ollama model %s without external lookup', async (model) => {
+    const app = createApp(config({ provider: 'ollama', model, apiKey: 'test-provider-key' }));
+    const response = await app.request(connectionRequest());
+    expect(await response.json()).toEqual({ provider: 'ollama', model, aiConfigured: true, imageAnalysisSupported: false });
+  });
+
+  it('does not claim support for arbitrary model names and preserves the full configured model', async () => {
+    const model = 'm'.repeat(200);
+    const response = await createApp(config({ provider: 'gemini', model })).request(connectionRequest());
+    expect(await response.json()).toEqual({ provider: 'gemini', model, aiConfigured: false, imageAnalysisSupported: null });
+    expect(connectionInfoSchema.safeParse({ provider: 'gemini', model: 'm'.repeat(201), aiConfigured: false, imageAnalysisSupported: null }).success).toBe(false);
+  });
+
+  it('preserves the analysis request budget and skips inference', async () => {
+    const provider = workingProvider();
+    const app = createApp(config({ requestsPerMinute: 1 }), { provider });
+    for (let attempt = 0; attempt < 3; attempt += 1) expect((await app.request(connectionRequest())).status).toBe(200);
+    expect(provider.analyze).not.toHaveBeenCalled();
+    expect((await app.request(request())).status).toBe(200);
+    expect((await app.request(connectionRequest())).status).toBe(200);
+    expect((await app.request(request())).status).toBe(429);
+    expect(provider.analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains origin and loopback host boundaries', async () => {
+    const app = createApp(config());
+    expect((await app.request(connectionRequest(`Bearer ${token}`, 'https://example.com'))).status).toBe(403);
+    expect((await app.request(new Request('http://untrusted.example/connection', { headers: { Authorization: `Bearer ${token}` } }))).status).toBe(403);
   });
 });

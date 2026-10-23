@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Encoded screenshots must fit the same pixel budget in the extension and API. */
+export const MAX_ENCODED_IMAGE_PIXELS = 16_777_216;
+
 const text = z.string().min(1).max(4000);
 const confidence = z.enum(['high', 'medium', 'low']);
 export const analysisSchema = z.object({
@@ -109,3 +112,12 @@ export function transition(report: Report, status: Workflow): Report {
 export function isCurrent(report: Report | null | undefined, sessionId: string, requestId?: string): report is Report {
   return !!report && report.sessionId === sessionId && (requestId === undefined || report.requestId === requestId);
 }
+
+/** Local configuration metadata only; neither provider authentication nor inference is tested. */
+export const connectionInfoSchema = z.object({
+  provider: z.enum(['openai', 'ollama', 'gemini']),
+  model: z.string().min(1).max(200),
+  aiConfigured: z.boolean(),
+  imageAnalysisSupported: z.boolean().nullable(),
+}).strict();
+export type ConnectionInfo = z.infer<typeof connectionInfoSchema>;

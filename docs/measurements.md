@@ -54,7 +54,7 @@ Photographs, illustrations, gradients, antialiasing, shadows, opacity and compos
 
 The worker re-encodes the cropped canvas, omitting the original file metadata. WebP is preferred; JPEG is a fallback when needed. It tries quality levels 0.90, 0.82 and 0.74 before progressively reducing dimensions. The size target is strictly below **100,000 encoded bytes**, excluding base64/JSON transport overhead.
 
-The resolution floor keeps at least 75% of the original cropped bitmap dimensions and avoids reducing the long edge below 1024 pixels. Smaller originals are not enlarged or downscaled. Quality never falls below 0.74. These controls are conservative heuristics, not an automated proof that every small label remains legible.
+The resolution floor keeps at least 75% of the original cropped bitmap dimensions and avoids reducing the long edge below 1024 pixels. Smaller originals are not enlarged or downscaled. Encoded images also stay within the API's shared 16,777,216-pixel limit, even when a large, low-detail image already meets the byte-size target. If fitting that limit would violate the resolution floor, local processing asks for a smaller region before upload. Quality never falls below 0.74. These controls are conservative heuristics, not an automated proof that every small label remains legible.
 
 If those limits cannot achieve the target, the smallest usable encoding is returned with `targetMet: false` and a warning. An encoding above 2,000,000 bytes is rejected with instructions to select a smaller area. Dense screenshots and photographs may exceed the target. Reviewing the in-memory preview and choosing a smaller, focused region is preferable to automatically discarding text detail.
 

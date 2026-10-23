@@ -743,6 +743,13 @@ kbd {
   color:var(--muted);
   max-width:300px;
 }
+.insights-empty>.primary-button {
+  margin-top:18px;
+}
+.insights-empty>.fine-print {
+  margin-top:8px;
+  font-size:11px;
+}
 .empty-method {
   display:flex;
   gap:10px;
@@ -894,7 +901,7 @@ kbd {
   font-weight:600;
   margin-bottom:6px;
 }
-.settings input {
+.settings input[type="password"] {
   width:100%;
   min-height:33px;
   background:white;
@@ -903,12 +910,75 @@ kbd {
   padding:7px 8px;
   font-size:12px;
 }
-.settings input::placeholder {
+.settings input[type="password"]::placeholder {
   font-size:11px;
   color:var(--muted);
 }
 .settings .fine-print {
   margin-top:8px;
+}
+.settings .settings-remember {
+  display:flex;
+  margin:14px 0 0;
+  font-weight:400;
+  color:#5b6475;
+}
+.settings-remember input {
+  padding:0;
+}
+.settings-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:14px;
+}
+.settings .unsaved-note {
+  color:#896329;
+}
+.connection-status {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin-top:14px;
+  padding:10px 11px;
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:4px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.65;
+}
+.connection-status>svg,.connection-status>.status-dot {
+  flex:none;
+  margin-top:3px;
+}
+.connection-status>div {
+  min-width:0;
+}
+.connection-status strong {
+  font-size:12px;
+  font-weight:600;
+}
+.connection-status p {
+  font-size:11px;
+  margin-top:3px;
+}
+.connection-status code {
+  font-size:11px;
+}
+.connection-status.connected {
+  background:#f3faf6;
+  border-color:#dcebe2;
+  color:#366b51;
+}
+.connection-status.needs-attention {
+  background:#fff8f2;
+  border-color:#eddfcb;
+  color:#886130;
+}
+.settings .forget-token {
+  margin-top:8px;
+  color:var(--error);
 }
 .service-address {
   display:flex;
@@ -1021,6 +1091,17 @@ kbd {
 .consent-section>.fine-print {
   font-size:11px;
   margin-bottom:0;
+}
+.connection-help {
+  padding:11px 12px;
+  margin:14px 0;
+  background:var(--secondary);
+  border:1px solid var(--border);
+  border-radius:4px;
+  color:#5b6475;
+}
+.connection-help>.text-button {
+  margin-top:5px;
 }
 .large-image-warning {
   padding:11px 12px;

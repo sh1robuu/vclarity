@@ -4,6 +4,8 @@ import { InspectionCoordinator, captureErrorMessage, publicError, sanitizePageUr
 import { readReport, removeReport, writeReport } from '../lib/background/storage';
 
 export default defineBackground(() => {
+  // Inspector content scripts never need access to saved local credentials.
+  void chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => undefined);
   const queues = new Map<number, Promise<unknown>>();
   const panels = new Map<chrome.runtime.Port, number>();
   const locks = new Map<number, Promise<void>>();

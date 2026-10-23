@@ -1,9 +1,9 @@
-import type { OptimizedImage } from '@vclarity/shared';
+import { MAX_ENCODED_IMAGE_PIXELS, type OptimizedImage } from '@vclarity/shared';
 import { imageSize } from 'image-size';
 import { ApiError } from '../errors';
 
 export const MAX_IMAGE_BYTES = 2_000_000;
-export const MAX_IMAGE_PIXELS = 16_777_216;
+export const MAX_IMAGE_PIXELS = MAX_ENCODED_IMAGE_PIXELS;
 export const MAX_JSON_BYTES = 2_800_000;
 
 /** Header dimensions come from the bytes, never solely from client metadata. */

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_ENCODED_IMAGE_PIXELS } from '@vclarity/shared';
 import { blobDataUrl, chooseEncoding, compressionCandidates, IMAGE_TARGET_BYTES } from './optimize';
 
 function encoded(bytes: number, type = 'image/webp'): Blob { return new Blob([new Uint8Array(bytes)], { type }); }
@@ -18,6 +19,32 @@ describe('readability-preserving compression controls', () => {
     expect(result.warning).toBeNull();
     expect(result.width).toBe(600);
     expect(encoder).toHaveBeenCalledTimes(1);
+  });
+  it('fits high-DPI captures to the API pixel budget even when byte size already meets the target', async () => {
+    const encoder = vi.fn(async () => encoded(50_000));
+    const result = await chooseEncoding(5000, 4000, encoder);
+    expect(result.targetMet).toBe(true);
+    expect(result.width * result.height).toBeLessThanOrEqual(MAX_ENCODED_IMAGE_PIXELS);
+    expect(result.width).toBeGreaterThanOrEqual(3750);
+    expect(result.height).toBeGreaterThanOrEqual(3000);
+    expect(encoder).toHaveBeenCalledTimes(1);
+  });
+  it('preserves exact supported resolution and never rounds a candidate above the pixel budget', () => {
+    expect(compressionCandidates(4096, 4096)[0]).toEqual({ width: 4096, height: 4096, quality: 0.9 });
+    for (const [width, height] of [[4097, 4096], [5461, 4096], [7001, 4001]] as const) {
+      const candidates = compressionCandidates(width, height);
+      expect(candidates.length).toBeGreaterThan(0);
+      for (const candidate of candidates) {
+        expect(candidate.width * candidate.height).toBeLessThanOrEqual(MAX_ENCODED_IMAGE_PIXELS);
+        expect(candidate.width).toBeGreaterThanOrEqual(Math.ceil(width * 0.75));
+        expect(candidate.height).toBeGreaterThanOrEqual(Math.ceil(height * 0.75));
+      }
+    }
+  });
+  it('rejects regions that cannot fit the API pixel budget without violating the readability floor', async () => {
+    const encoder = vi.fn(async () => encoded(50_000));
+    await expect(chooseEncoding(8192, 3900, encoder)).rejects.toThrow('Select a smaller area');
+    expect(encoder).not.toHaveBeenCalled();
   });
   it('adjusts quality before reducing dimensions', async () => {
     const encoder = vi.fn(async ({ quality }: { quality: number }) => encoded(quality > 0.8 ? 120_000 : 90_000));

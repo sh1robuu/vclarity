@@ -1,5 +1,19 @@
 # Verification record
 
+## 23 October 2026: product audit and 0.1.1 fixes
+
+The current source passed `pnpm typecheck`, `pnpm lint`, `pnpm test` (228 tests in 17 suites), `pnpm build` and `pnpm test:browser` (4 scenarios). The new browser regression checks the distinct Insights starter, Enter-to-save, visible save/connection feedback, storage surviving panel-page closure/reopen, Forget, and opt-out from persistence. Existing DOM, pixel/capture, consent, retry and clipboard scenarios still pass. Provider calls in browser tests remain explicitly mocked.
+
+The running bundled backend also returned `/health` HTTP 200, unauthenticated `/connection` HTTP 401 and authenticated `/connection` HTTP 200 with Gemini configuration metadata and `Cache-Control: no-store`. This check used the existing local credential without logging it; no new provider inference was performed. The previously recorded live Gemini fixture request remains the live Vision evidence.
+
+Additional regressions cover trusted-context local-token storage, offline saving, rejected provider-key input, storage failure, malformed saved data, stale checks after Forget, unrelated-tab broadcasts during initial context restoration, authenticated metadata routing, and one shared encoded-image pixel limit. The panel deadline now leaves room above the backend's supported 120-second maximum. See the [Vietnamese product audit](product-audit-2026-10-23.md) for feature status, fixes and release priorities.
+
+Reviewed current 300 px screenshots: [Insights starter](screenshots/insights-starter-0.1.1.png) and [saved connection](screenshots/connection-saved-0.1.1.png). Screenshots use fixture configuration, contain no real credentials, and render the actual extension page; the native docking and remaining manual checks below still apply.
+
+Release `vclarity-0.1.1-chrome.zip` contains 12 files, is 160,275 bytes, and has SHA-256 `60f6df0b95cb2cbc256088e02da74f96f550e6ce3bb237d1568dd4eea4f97bf5`. Each archived file and the extracted release folder match the browser-tested production build byte for byte; its manifest reports 0.1.1. A scan of the 12 built files against the configured provider key and local access token found neither secret in the output. Checksums are retained in `releases/SHA256SUMS.txt`.
+
+## Earlier implementation evidence
+
 Executed on 22 October 2026 on Windows x64, Intel Core i5-12500H, Node v24.19.0, pnpm 11.25.0, WXT 0.21.4 and Playwright 1.64.1. Browser execution used an isolated Chromium 156.0.8078.4 profile with the production unpacked MV3 build. It did not use the user's normal browser profile or private website content.
 
 | Check | Recorded result |

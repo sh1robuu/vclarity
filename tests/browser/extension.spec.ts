@@ -167,7 +167,10 @@ for (const scale of [1, 2]) {
         await expect(fixture.panel.getByRole('button', { name: 'Send image & analyze' })).toBeDisabled();
         expect(requests).toHaveLength(0);
         await fixture.panel.getByRole('button', { name: 'Settings', exact: true }).click();
+        await fixture.panel.route('http://127.0.0.1:4317/connection', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ provider: 'gemini', model: 'fixture-vision', aiConfigured: true, imageAnalysisSupported: null }) }));
         await fixture.panel.getByLabel('Local service access token').fill('test-service-access-token-for-browser-suite');
+        await fixture.panel.getByLabel('Local service access token').press('Enter');
+        await expect(fixture.panel.getByTestId('settings-status')).toContainText('Token saved');
         await fixture.panel.getByRole('button', { name: 'Close settings' }).click();
         await fixture.panel.getByLabel('I allow this selected image to be sent for AI analysis.').check();
         await expect(fixture.panel.getByRole('button', { name: 'Send image & analyze' })).toBeEnabled();
@@ -197,3 +200,55 @@ for (const scale of [1, 2]) {
     } finally { await fixture.context.close(); }
   });
 }
+
+test('Insights has its own starter; Enter saves a token, reopen restores it, and Forget removes it', async () => {
+  const fixture = await loadExtension();
+  const token = 'test-local-service-token-for-reopen-regression';
+  const metadata = { provider: 'gemini', model: 'fixture-vision', aiConfigured: true, imageAnalysisSupported: null };
+  try {
+    await fixture.context.route('http://127.0.0.1:4317/connection', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metadata) }));
+    await fixture.panel.getByTestId('tab-insights').click();
+    await expect(fixture.panel.getByTestId('insights-start-ghost')).toBeVisible();
+    await fixture.panel.setViewportSize({ width: 300, height: 1000 });
+    await fixture.panel.screenshot({ path: 'test-results/vclarity-insights-starter.png', fullPage: true });
+    await fixture.panel.getByTestId('inspect-live').click();
+    await expect(fixture.panel.getByTestId('tab-insights')).toHaveAttribute('aria-selected', 'true');
+    await expect(fixture.page.locator('[data-vclarity-overlay]')).toHaveCount(1);
+    await fixture.page.keyboard.press('Escape');
+    await expect(fixture.page.locator('[data-vclarity-overlay]')).toHaveCount(0);
+    await fixture.panel.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(fixture.panel.getByTestId('settings-status')).not.toContainText('Restoring');
+    await fixture.panel.getByLabel('Local service access token').fill(token);
+    await expect(fixture.panel.getByText('Changes are not saved yet.', { exact: false })).toBeVisible();
+    expect(await fixture.worker.evaluate(async () => (await chrome.storage.local.get(null))['vclarity.connection.v1'])).toBeUndefined();
+    await fixture.panel.getByLabel('Local service access token').press('Enter');
+    await expect(fixture.panel.getByTestId('settings-status')).toContainText('Token saved on this device');
+    await expect(fixture.panel.getByTestId('settings-status')).toContainText('Local service connected');
+    await expect(fixture.panel.getByTestId('settings-status')).toContainText('fixture-vision');
+    expect(await fixture.panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await fixture.panel.screenshot({ path: 'test-results/vclarity-connection-saved.png', fullPage: true });
+    await fixture.panel.close();
+    const reopened = await fixture.context.newPage();
+    await reopened.goto(`chrome-extension://${fixture.id}/sidepanel.html`);
+    await fixture.page.bringToFront();
+    await reopened.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(reopened.getByLabel('Local service access token')).toHaveValue(token);
+    await expect(reopened.getByTestId('settings-status')).toContainText('Local service connected');
+    expect(await fixture.worker.evaluate(async () => chrome.storage.local.get(null))).toEqual({ 'vclarity.connection.v1': { token, remember: true } });
+    await reopened.getByTestId('settings-forget').click();
+    await expect(reopened.getByLabel('Local service access token')).toHaveValue('');
+    await expect(reopened.getByTestId('settings-status')).toContainText('Saved token removed');
+    expect(await fixture.worker.evaluate(async () => chrome.storage.local.get(null))).toEqual({});
+    await reopened.getByLabel('Local service access token').fill(token);
+    await reopened.getByTestId('settings-remember').uncheck();
+    await reopened.getByTestId('settings-save').click();
+    await expect(reopened.getByTestId('settings-status')).toContainText('open panel only');
+    expect(await fixture.worker.evaluate(async () => chrome.storage.local.get(null))).toEqual({});
+    await reopened.close();
+    const fresh = await fixture.context.newPage();
+    await fresh.goto(`chrome-extension://${fixture.id}/sidepanel.html`);
+    await fresh.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(fresh.getByTestId('settings-status')).toContainText('No connection saved');
+    await expect(fresh.getByLabel('Local service access token')).toHaveValue('');
+  } finally { await fixture.context.close(); }
+});

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
-import { analysisRequestSchema, analysisResponseSchema } from '@vclarity/shared';
+import { analysisRequestSchema, analysisResponseSchema, connectionInfoSchema } from '@vclarity/shared';
 import type { ApiConfig } from './config';
 import { ApiError, publicError } from './errors';
 import { OpenAIVisionProvider } from './providers/openai';
@@ -24,6 +24,12 @@ export function createApp(config: ApiConfig, dependencies: AppDependencies = {})
   const now = dependencies.now ?? Date.now;
   const log = dependencies.log ?? (() => undefined);
   const tokenDigest = digest(config.accessToken);
+  const authenticate = (authorization: string | undefined): void => {
+    const supplied = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
+    if (supplied.length > 512 || !timingSafeEqual(digest(supplied), tokenDigest)) {
+      throw new ApiError('unauthorized', 'The backend access token is missing or invalid. Check extension settings.', 401);
+    }
+  };
   let windowStart = now();
   let requests = 0;
   let active = 0;
@@ -58,14 +64,25 @@ export function createApp(config: ApiConfig, dependencies: AppDependencies = {})
 
   app.get('/health', (context) => context.json({ status: 'ok', aiConfigured: !!provider }));
 
+  app.get('/connection', (context) => {
+    try {
+      authenticate(context.req.header('Authorization'));
+      // Configuration-only: do not call a paid provider or use the analysis budget.
+      const info = connectionInfoSchema.parse({
+        provider: config.provider, model: config.model, aiConfigured: !!provider,
+        imageAnalysisSupported: config.provider === 'ollama' && /^gpt-oss(?::|$)/i.test(config.model) ? false : null,
+      });
+      return context.json(info);
+    } catch (error) {
+      const safe = publicError(error);
+      return context.json({ error: { code: safe.code, message: safe.message } }, safe.status);
+    }
+  });
+
   app.post('/analyze', async (context) => {
     let requestId: string | undefined;
     try {
-      const authorization = context.req.header('Authorization') ?? '';
-      const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-      if (supplied.length > 512 || !timingSafeEqual(digest(supplied), tokenDigest)) {
-        throw new ApiError('unauthorized', 'The backend access token is missing or invalid. Check extension settings.', 401);
-      }
+      authenticate(context.req.header('Authorization'));
       if (now() - windowStart >= 60_000) { windowStart = now(); requests = 0; }
       requests += 1;
       if (requests > config.requestsPerMinute) {
